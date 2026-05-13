@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>公車動態查詢系統</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        /* === 分頁標籤 === */
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            font-size: 15px;
+            font-weight: 600;
+            color: #666;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab:hover {
+            color: #667eea;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* === 表單樣式 === */
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 2fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 6px;
+        }
+
+        select, input {
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: all 0.3s;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        button {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* === 新增站牌表單 === */
+        .favorite-form {
+            display: grid;
+            grid-template-columns: 1fr 2fr 2fr auto;
+            gap: 12px;
+            align-items: end;
+        }
+
+        /* === 狀態訊息 === */
+        .status {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border-left: 4px solid #28a745;
+            display: block;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border-left: 4px solid #dc3545;
+            display: block;
+        }
+
+        .status.loading {
+            background: #d1ecf1;
+            color: #0c5460;
+            border-left: 4px solid #17a2b8;
+            display: block;
+        }
+
+        /* === 結果區域 === */
+        .section {
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        /* === 車輛進度條 === */
+        .vehicle-progress {
+            background: #fff3e0;
+            border: 2px solid #ff9800;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+
+        .vehicle-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .vehicle-icon {
+            font-size: 32px;
+        }
+
+        .vehicle-info {
+            flex: 1;
+        }
+
+        .vehicle-plate {
+            font-size: 18px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .vehicle-eta {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .progress-container {
+            position: relative;
+            margin-bottom: 8px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        .progress-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .progress-start {
+            font-weight: 600;
+        }
+
+        .progress-end {
+            font-weight: 600;
+            color: #ff9800;
+        }
+
+        /* === 站牌列表 === */
+        .stop-list-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin: 20px 0 12px 0;
+        }
+
+        .eta-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border-left: 4px solid #667eea;
+            transition: all 0.3s;
+        }
+
+        .eta-item:hover {
+            background: #e9ecef;
+            transform: translateX(4px);
+        }
+
+        .eta-info {
+            flex: 1;
+        }
+
+        .stop-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .route-info {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .plate-number {
+            background: #fff3cd;
+            color: #856404;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 12px;
+        }
+
+        .eta-time {
+            font-size: 20px;
+            font-weight: 700;
+            padding: 8px 16px;
+            border-radius: 8px;
+            min-width: 100px;
+            text-align: center;
+        }
+
+        .eta-time.arriving {
+            background: #d4edda;
+            color: #28a745;
+        }
+
+        .eta-time.no-data {
+            background: #f8d7da;
+            color: #721c24;
+            font-size: 14px;
+        }
+
+        .empty {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+            font-size: 15px;
+        }
+
+        /* === 收藏站牌卡片 === */
+        .favorite-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border-left: 4px solid #667eea;
+        }
+
+        .favorite-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .favorite-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #333;
+        }
+
+        .delete-btn {
+            background: #dc3545;
+            padding: 6px 12px;
+            font-size: 13px;
+        }
+
+        .delete-btn:hover {
+            background: #c82333;
+        }
+
+        /* === 手機版響應式設計 === */
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 24px;
+            }
+
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+
+            .favorite-form {
+                grid-template-columns: 1fr;
+            }
+
+            .tabs {
+                gap: 4px;
+            }
+
+            .tab {
+                padding: 10px 16px;
+                font-size: 14px;
+            }
+
+            .card {
+                padding: 16px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 12px;
+            }
+
+            .header h1 {
+                font-size: 20px;
+            }
+
+            .card {
+                padding: 12px;
+            }
+
+            .eta-item {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .eta-time {
+                align-self: flex-end;
+                margin-top: 8px;
+            }
+
+            select, input, button {
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚌 公車動態查詢</h1>
+            <p>即時到站資訊 • 路線查詢 • 收藏站牌</p>
+        </div>
+
+        <div class="card">
+            <!-- 分頁標籤 -->
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('route')">路線查詢</button>
+                <button class="tab" onclick="switchTab('favorites')">收藏站牌</button>
+            </div>
+
+            <!-- 路線查詢頁籤 -->
+            <div id="routeTab" class="tab-content active">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="city">縣市</label>
+                        <select id="city">
+                            <option value="Taipei">台北市</option>
+                            <option value="NewTaipei">新北市</option>
+                            <option value="Keelung">基隆市</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="routeName">路線編號</label>
+                        <input type="text" id="routeName" placeholder="例如：307、棕1">
+                    </div>
+                    <div class="form-group">
+                        <label style="opacity: 0;">查詢</label>
+                        <button id="searchBtn" onclick="searchBus()">查詢</button>
+                    </div>
+                </div>
+
+                <div id="status" class="status"></div>
+                <div id="results"></div>
+            </div>
+
+            <!-- 收藏站牌頁籤 -->
+            <div id="favoritesTab" class="tab-content">
+                <div class="favorite-form">
+                    <div class="form-group">
+                        <label for="favCity">縣市</label>
+                        <select id="favCity">
+                            <option value="Taipei">台北市</option>
+                            <option value="NewTaipei">新北市</option>
+                            <option value="Keelung">基隆市</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="favStopName">站牌名稱</label>
+                        <input type="text" id="favStopName" placeholder="例如：台北車站">
+                    </div>
+                    <div class="form-group">
+                        <label for="favRouteName">路線編號（選填）</label>
+                        <input type="text" id="favRouteName" placeholder="例如：307">
+                    </div>
+                    <div class="form-group">
+                        <label style="opacity: 0;">新增</label>
+                        <button onclick="addFavorite()">➕ 新增</button>
+                    </div>
+                </div>
+
+                <div id="favStatus" class="status"></div>
+                <div id="favoritesList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // === 全域變數 ===
+        let tokenData = null;
+        let autoRefreshTimer = null;
+        let favoriteRefreshTimer = null;
+        let routeInfoCache = {};
+
+        // === TDX API Token 管理 ===
+        async function getValidToken() {
+            const now = Date.now();
+            
+            if (tokenData && tokenData.expiry > now) {
+                return tokenData.access_token;
+            }
+            
+            const response = await fetch('https://tdx.transportdata.tw/auth/realms/TDXConnect/protocol/openid-connect/token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    grant_type: 'client_credentials',
+                    client_id: 'kaihsing-561392ff-c837-4911',
+                    client_secret: 'b00759f1-166d-41ca-8cbc-c9a55503350c'
+                })
+            });
+            
+            const data = await response.json();
+            tokenData = {
+                access_token: data.access_token,
+                expiry: now + (data.expires_in - 60) * 1000
+            };
+            
+            return tokenData.access_token;
+        }
+
+        // === 路線查詢功能 ===
+        async function searchBus() {
+            const city = document.getElementById('city').value;
+            const routeName = document.getElementById('routeName').value.trim();
+            
+            if (!routeName) {
+                showStatus('請輸入路線編號', 'error');
+                return;
+            }
+            
+            showStatus('查詢中...', 'loading');
+            document.getElementById('searchBtn').disabled = true;
+            
+            try {
+                const token = await getValidToken();
+                const cacheKey = `${city}_${routeName}`;
+                
+                // 1. 取得路線站點資訊
+                let routeStops = { dir0: [], dir1: [] };
+                let routeInfo = { dir0: '終點站', dir1: '終點站' };
+                
+                if (routeInfoCache[cacheKey]) {
+                    routeStops = routeInfoCache[cacheKey].stops;
+                    routeInfo = routeInfoCache[cacheKey].info;
+                    console.log('✅ 使用快取的路線資訊');
+                } else {
+                    console.log('🔄 查詢路線站點...');
+                    const stopUrl = `https://tdx.transportdata.tw/api/basic/v2/Bus/StopOfRoute/City/${city}/${encodeURIComponent(routeName)}?$format=JSON`;
+                    const stopResponse = await fetch(stopUrl, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/json'
+                        }
+                    });
+                    
+                    if (stopResponse.ok) {
+                        const stopData = await stopResponse.json();
+                        stopData.forEach(route => {
+                            if (route.Direction === 0) {
+                                routeStops.dir0 = route.Stops || [];
+                                if (routeStops.dir0.length > 0) {
+                                    routeInfo.dir0 = routeStops.dir0[routeStops.dir0.length - 1].StopName?.Zh_tw || '終點站';
+                                }
+                            }
+                            if (route.Direction === 1) {
+                                routeStops.dir1 = route.Stops || [];
+                                if (routeStops.dir1.length > 0) {
+                                    routeInfo.dir1 = routeStops.dir1[routeStops.dir1.length - 1].StopName?.Zh_tw || '終點站';
+                                }
+                            }
+                        });
+                        routeInfoCache[cacheKey] = { stops: routeStops, info: routeInfo };
+                        console.log('✅ 已快取路線資訊');
+                    }
+                }
+                
+                // 2. 取得 ETA 資料
+                const etaUrl = `https://tdx.transportdata.tw/api/basic/v2/Bus/EstimatedTimeOfArrival/City/${city}/${encodeURIComponent(routeName)}?$format=JSON`;
+                const etaResponse = await fetch(etaUrl, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                if (etaResponse.status === 429) {
+                    throw new Error('請求過於頻繁，請稍後再試');
+                }
+                
+                if (!etaResponse.ok) {
+                    throw new Error(`API 錯誤 ${etaResponse.status}`);
+                }
+                
+                let etaData = await etaResponse.json();
+                
+                // 3. 取得即時車輛資料
+                const rtUrl = `https://tdx.transportdata.tw/api/basic/v2/Bus/RealTimeNearStop/City/${city}/${encodeURIComponent(routeName)}?$format=JSON`;
+                const rtResponse = await fetch(rtUrl, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                let rtData = [];
+                if (rtResponse.ok) {
+                    rtData = await rtResponse.json();
+                }
+                
+                // 4. 合併車牌資料和站序
+                etaData = etaData.map(eta => {
+                    const match = rtData.find(rt => 
+                        rt.StopUID === eta.StopUID && rt.Direction === eta.Direction
+                    );
+                    
+                    // 找出站序
+                    let stopSequence = 999;
+                    const stops = eta.Direction === 0 ? routeStops.dir0 : routeStops.dir1;
+                    const stopIndex = stops.findIndex(s => s.StopUID === eta.StopUID);
+                    if (stopIndex >= 0) {
+                        stopSequence = stopIndex;
+                    }
+                    
+                    return { 
+                        ...eta, 
+                        PlateNumb: match?.PlateNumb || null,
+                        StopSequence: stopSequence
+                    };
+                });
+                
+                console.log('🚌 有車牌的站:', etaData.filter(e => e.PlateNumb));
+                
+                displayResults(etaData, routeInfo, routeStops);
+                showStatus(`查詢成功！共 ${etaData.length} 筆資料`, 'success');
+
+                if (!autoRefreshTimer) {
+                    startAutoRefresh();
+                }
+                
+            } catch (error) {
+                showStatus(`錯誤：${error.message}`, 'error');
+                document.getElementById('results').innerHTML = '';
+                if (autoRefreshTimer) {
+                    clearInterval(autoRefreshTimer);
+                    autoRefreshTimer = null;
+                }
+            } finally {
+                document.getElementById('searchBtn').disabled = false;
+            }
+        }
+
+        // === 顯示路線查詢結果（含進度條）===
+        function displayResults(data, routeInfo, routeStops) {
+            const resultsDiv = document.getElementById('results');
+            
+            if (data.length === 0) {
+                resultsDiv.innerHTML = '<div class="empty">查無資料</div>';
+                return;
+            }
+            
+            // 按方向分組
+            const going = data.filter(d => d.Direction === 0);
+            const returning = data.filter(d => d.Direction === 1);
+            
+            let html = '';
+            
+            // 去程
+            if (going.length > 0) {
+                html += `<div class="section"><div class="section-title">🔵 往 ${routeInfo.dir0}</div>`;
+                html += renderDirectionWithProgress(going, routeStops.dir0, routeInfo.dir0);
+                html += '</div>';
+            }
+            
+            // 回程
+            if (returning.length > 0) {
+                html += `<div class="section"><div class="section-title">🔴 往 ${routeInfo.dir1}</div>`;
+                html += renderDirectionWithProgress(returning, routeStops.dir1, routeInfo.dir1);
+                html += '</div>';
+            }
+            
+            resultsDiv.innerHTML = html;
+        }
+
+        // === 渲染單一方向（含進度條）===
+        function renderDirectionWithProgress(stops, routeStops, destination) {
+            // 找出有車輛的站（5分鐘內）
+            const vehicleStops = stops.filter(s => s.PlateNumb && s.EstimateTime != null && s.EstimateTime >= 0 && s.EstimateTime <= 300);
+            
+            let html = '';
+            
+            // 顯示車輛進度條
+            if (vehicleStops.length > 0 && routeStops.length > 0) {
+                vehicleStops.forEach(vehicle => {
+                    const totalStops = routeStops.length;
+                    const currentStop = vehicle.StopSequence;
+                    const progress = totalStops > 1 ? (currentStop / (totalStops - 1)) * 100 : 0;
+                    const startStop = routeStops[0]?.StopName?.Zh_tw || '起站';
+                    const minutes = Math.floor(vehicle.EstimateTime / 60);
+                    
+                    html += `
+                        <div class="vehicle-progress">
+                            <div class="vehicle-header">
+                                <div class="vehicle-icon">🚌</div>
+                                <div class="vehicle-info">
+                                    <div class="vehicle-plate">${vehicle.PlateNumb}</div>
+                                    <div class="vehicle-eta">即將抵達 ${vehicle.StopName?.Zh_tw || '未知站'} • 約${minutes}分</div>
+                                </div>
+                            </div>
+                            <div class="progress-container">
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: ${progress}%"></div>
+                                </div>
+                                <div class="progress-labels">
+                                    <span class="progress-start">${startStop}</span>
+                                    <span class="progress-end">${destination}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            
+            // 顯示所有站點列表（按時間排序）
+            const sortedStops = stops.sort((a, b) => {
+                const timeA = a.EstimateTime != null && a.EstimateTime >= 0 ? a.EstimateTime : 999999;
+                const timeB = b.EstimateTime != null && b.EstimateTime >= 0 ? b.EstimateTime : 999999;
+                return timeA - timeB;
+            });
+            
+            if (sortedStops.length > 0) {
+                html += '<div class="stop-list-title">所有站點</div>';
+                sortedStops.forEach(eta => {
+                    html += renderEtaItem(eta);
+                });
+            }
+            
+            return html;
+        }
+
+        // === 渲染 ETA 項目 ===
+        function renderEtaItem(eta) {
+            const stopName = eta.StopName?.Zh_tw || '未知';
+            const routeName = eta.RouteName?.Zh_tw || '';
+            
+            let timeText, timeClass;
+            const t = eta.EstimateTime;
+            
+            const plateNum = eta.PlateNumb ? ` • <span class="plate-number">${eta.PlateNumb}</span>` : '';
+            
+            if (t == null || t < 0) {
+                timeText = '無資料';
+                timeClass = 'no-data';
+            } else if (t === 0) {
+                timeText = '進站中';
+                timeClass = 'arriving';
+            } else {
+                const minutes = Math.floor(t / 60);
+                timeText = `約${minutes}分`;
+                timeClass = 'arriving';
+            }
+            
+            return `
+                <div class="eta-item">
+                    <div class="eta-info">
+                        <div class="stop-name">${stopName}</div>
+                        <div class="route-info">${routeName}${plateNum}</div>
+                    </div>
+                    <div class="eta-time ${timeClass}">${timeText}</div>
+                </div>
+            `;
+        }
+
+        // === 自動刷新（30 秒）===
+        function startAutoRefresh() {
+            if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+            autoRefreshTimer = setInterval(() => {
+                const routeName = document.getElementById('routeName').value.trim();
+                if (routeName && document.getElementById('routeTab').classList.contains('active')) {
+                    console.log('🔄 自動刷新路線查詢（30秒）...');
+                    searchBus();
+                }
+            }, 30000);
+            
+            if (favoriteRefreshTimer) clearInterval(favoriteRefreshTimer);
+            favoriteRefreshTimer = setInterval(() => {
+                if (document.getElementById('favoritesTab').classList.contains('active')) {
+                    console.log('🔄 自動刷新收藏站牌（30秒）...');
+                    loadFavorites();
+                }
+            }, 30000);
+            
+            console.log('✅ 已啟動自動刷新（每 30 秒）');
+        }
+
+        // === 狀態訊息 ===
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        function showFavStatus(message, type) {
+            const statusDiv = document.getElementById('favStatus');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+            setTimeout(() => {
+                statusDiv.className = 'status';
+            }, 3000);
+        }
+
+        // === 分頁切換 ===
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            if (tabName === 'route') {
+                document.querySelector('.tab:nth-child(1)').classList.add('active');
+                document.getElementById('routeTab').classList.add('active');
+            } else {
+                document.querySelector('.tab:nth-child(2)').classList.add('active');
+                document.getElementById('favoritesTab').classList.add('active');
+                loadFavorites();
+            }
+        }
+
+        // === 收藏站牌管理 ===
+        function addFavorite() {
+            const city = document.getElementById('favCity').value;
+            const stopName = document.getElementById('favStopName').value.trim();
+            const routeName = document.getElementById('favRouteName').value.trim();
+            
+            if (!stopName) {
+                showFavStatus('請輸入站牌名稱', 'error');
+                return;
+            }
+            
+            let favorites = JSON.parse(localStorage.getItem('busFavorites') || '[]');
+            favorites.push({ city, stopName, routeName: routeName || null });
+            localStorage.setItem('busFavorites', JSON.stringify(favorites));
+            
+            document.getElementById('favStopName').value = '';
+            document.getElementById('favRouteName').value = '';
+            
+            showFavStatus('已新增收藏', 'success');
+            loadFavorites();
+        }
+
+        function deleteFavorite(index) {
+            let favorites = JSON.parse(localStorage.getItem('busFavorites') || '[]');
+            favorites.splice(index, 1);
+            localStorage.setItem('busFavorites', JSON.stringify(favorites));
+            showFavStatus('已刪除', 'success');
+            loadFavorites();
+        }
+
+        async function loadFavorites() {
+            const favorites = JSON.parse(localStorage.getItem('busFavorites') || '[]');
+            const listDiv = document.getElementById('favoritesList');
+            
+            if (favorites.length === 0) {
+                listDiv.innerHTML = '<div class="empty">尚無收藏站牌</div>';
+                return;
+            }
+            
+            let html = '';
+            
+            for (let i = 0; i < favorites.length; i++) {
+                const fav = favorites[i];
+                html += `
+                    <div class="favorite-card">
+                        <div class="favorite-header">
+                            <div class="favorite-title">${fav.stopName}${fav.routeName ? ` (${fav.routeName})` : ''}</div>
+                            <button class="delete-btn" onclick="deleteFavorite(${i})">刪除</button>
+                        </div>
+                        <div id="fav-${i}">載入中...</div>
+                    </div>
+                `;
+            }
+            
+            listDiv.innerHTML = html;
+            
+            for (let i = 0; i < favorites.length; i++) {
+                const fav = favorites[i];
+                try {
+                    const token = await getValidToken();
+                    let url = `https://tdx.transportdata.tw/api/basic/v2/Bus/EstimatedTimeOfArrival/City/${fav.city}?$filter=contains(StopName/Zh_tw,'${encodeURIComponent(fav.stopName)}')`;
+                    if (fav.routeName) {
+                        url += ` and RouteName/Zh_tw eq '${encodeURIComponent(fav.routeName)}'`;
+                    }
+                    url += '&$format=JSON';
+                    
+                    const response = await fetch(url, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/json'
+                        }
+                    });
+                    
+                    if (response.status === 429) {
+                        document.getElementById(`fav-${i}`).innerHTML = '<div style="color: #dc3545; font-size: 14px;">請求過於頻繁</div>';
+                        continue;
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (data.length === 0) {
+                        document.getElementById(`fav-${i}`).innerHTML = '<div style="color: #999; font-size: 14px;">查無資料</div>';
+                    } else {
+                        let etaHtml = '';
+                        
+                        const going = data.filter(d => d.Direction === 0).sort((a, b) => {
+                            const timeA = a.EstimateTime != null && a.EstimateTime >= 0 ? a.EstimateTime : 999999;
+                            const timeB = b.EstimateTime != null && b.EstimateTime >= 0 ? b.EstimateTime : 999999;
+                            return timeA - timeB;
+                        });
+                        
+                        const returning = data.filter(d => d.Direction === 1).sort((a, b) => {
+                            const timeA = a.EstimateTime != null && a.EstimateTime >= 0 ? a.EstimateTime : 999999;
+                            const timeB = b.EstimateTime != null && b.EstimateTime >= 0 ? b.EstimateTime : 999999;
+                            return timeA - timeB;
+                        });
+                        
+                        if (going.length > 0) {
+                            etaHtml += '<div style="font-size: 13px; color: #667eea; font-weight: 600; margin-bottom: 8px;">🔵 去程</div>';
+                            going.slice(0, 2).forEach(eta => {
+                                etaHtml += renderEtaItem(eta);
+                            });
+                        }
+                        
+                        if (returning.length > 0) {
+                            etaHtml += '<div style="font-size: 13px; color: #764ba2; font-weight: 600; margin: 12px 0 8px 0;">🔴 回程</div>';
+                            returning.slice(0, 2).forEach(eta => {
+                                etaHtml += renderEtaItem(eta);
+                            });
+                        }
+                        
+                        document.getElementById(`fav-${i}`).innerHTML = etaHtml;
+                    }
+                } catch (error) {
+                    document.getElementById(`fav-${i}`).innerHTML = `<div style="color: #dc3545; font-size: 14px;">錯誤：${error.message}</div>`;
+                }
+            }
+        }
+
+        // === 初始化 ===
+        document.getElementById('routeName').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') searchBus();
+        });
+    </script>
+</body>
+</html>
