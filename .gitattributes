@@ -1,0 +1,19 @@
+# 自動處理行尾
+* text=auto
+
+# 強制特定檔案使用 LF (Unix 格式)
+*.html text eol=lf
+*.php text eol=lf
+*.js text eol=lf
+*.css text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+
+# 二進位檔案不處理
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
