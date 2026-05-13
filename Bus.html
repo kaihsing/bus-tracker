@@ -535,130 +535,161 @@
         }
 
         async function searchBus() {
-            const city = document.getElementById('city').value;
-            const routeName = document.getElementById('routeName').value.trim();
-            
-            if (!routeName) {
-                showStatus('請輸入路線編號', 'error');
-                return;
-            }
-            
-            showStatus('查詢中...', 'loading');
-            document.getElementById('searchBtn').disabled = true;
-            
-            try {
-                const token = await getValidToken();
-                const cacheKey = `${city}_${routeName}`;
-                
-                let routeStops = { dir0: [], dir1: [] };
-                let routeInfo = { dir0: '終點站', dir1: '終點站' };
-                
-                if (routeInfoCache[cacheKey]) {
-                    routeStops = routeInfoCache[cacheKey].stops;
-                    routeInfo = routeInfoCache[cacheKey].info;
-                    console.log('✅ 使用快取的路線資訊');
-                } else {
-                    console.log('🔄 查詢路線站點...');
-                    const stopUrl = `https://tdx.transportdata.tw/api/basic/v2/Bus/StopOfRoute/City/${city}/${encodeURIComponent(routeName)}?$format=JSON`;
-                    const stopResponse = await fetch(stopUrl, {
+                const city = document.getElementById('city').value;
+                const routeName = document.getElementById('routeName').value.trim();
+
+                if (!routeName) {
+                    showStatus('請輸入路線編號', 'error');
+                    return;
+                }
+
+                showStatus('查詢中...', 'loading');
+                document.getElementById('searchBtn').disabled = true;
+
+                try {
+                    const token = await getValidToken();
+                    const cacheKey = `${city}_${routeName}`;
+
+                    let routeStops = { dir0: [], dir1: [] };
+                    let routeInfo = { dir0: '終點站', dir1: '終點站' };
+
+                    if (routeInfoCache[cacheKey]) {
+                        routeStops = routeInfoCache[cacheKey].stops;
+                        routeInfo = routeInfoCache[cacheKey].info;
+                        console.log('✅ 使用快取的路線資訊');
+                    } else {
+                        console.log('🔄 查詢路線站點...');
+                        const stopUrl = `https://tdx.transportdata.tw/api/basic/v2/Bus/StopOfRoute/City/${city}/${encodeURIComponent(routeName)}?$format=JSON`;
+                        const stopResponse = await fetch(stopUrl, {
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Accept': 'application/json'
+                            }
+                        });
+
+                        if (stopResponse.ok) {
+                            const stopData = await stopResponse.json();
+                            stopData.forEach(route => {
+                                if (route.Direction === 0) {
+                                    routeStops.dir0 = route.Stops || [];
+                                    if (routeStops.dir0.length > 0) {
+                                        routeInfo.dir0 = routeStops.dir0[routeStops.dir0.length - 1].StopName?.Zh_tw || '終點站';
+                                    }
+                                }
+                                if (route.Direction === 1) {
+                                    routeStops.dir1 = route.Stops || [];
+                                    if (routeStops.dir1.length > 0) {
+                                        routeInfo.dir1 = routeStops.dir1[routeStops.dir1.length - 1].StopName?.Zh_tw || '終點站';
+                                    }
+                                }
+                            });
+                            routeInfoCache[cacheKey] = { stops: routeStops, info: routeInfo };
+                            console.log('✅ 已快取路線資訊');
+                        }
+                    }
+
+                    const etaUrl = `https://tdx.transportdata.tw/api/basic/v2/Bus/EstimatedTimeOfArrival/City/${city}/${encodeURIComponent(routeName)}?$format=JSON`;
+                    const etaResponse = await fetch(etaUrl, {
                         headers: {
                             'Authorization': `Bearer ${token}`,
                             'Accept': 'application/json'
                         }
                     });
-                    
-                    if (stopResponse.ok) {
-                        const stopData = await stopResponse.json();
-                        stopData.forEach(route => {
-                            if (route.Direction === 0) {
-                                routeStops.dir0 = route.Stops || [];
-                                if (routeStops.dir0.length > 0) {
-                                    routeInfo.dir0 = routeStops.dir0[routeStops.dir0.length - 1].StopName?.Zh_tw || '終點站';
-                                }
-                            }
-                            if (route.Direction === 1) {
-                                routeStops.dir1 = route.Stops || [];
-                                if (routeStops.dir1.length > 0) {
-                                    routeInfo.dir1 = routeStops.dir1[routeStops.dir1.length - 1].StopName?.Zh_tw || '終點站';
-                                }
-                            }
-                        });
-                        routeInfoCache[cacheKey] = { stops: routeStops, info: routeInfo };
-                        console.log('✅ 已快取路線資訊');
-                    }
-                }
-                
-                const etaUrl = `https://tdx.transportdata.tw/api/basic/v2/Bus/EstimatedTimeOfArrival/City/${city}/${encodeURIComponent(routeName)}?$format=JSON`;
-                const etaResponse = await fetch(etaUrl, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Accept': 'application/json'
-                    }
-                });
-                
-                if (etaResponse.status === 429) {
-                    throw new Error('請求過於頻繁，請稍後再試');
-                }
-                
-                if (!etaResponse.ok) {
-                    throw new Error(`API 錯誤 ${etaResponse.status}`);
-                }
-                
-                let etaData = await etaResponse.json();
-                
-                const rtUrl = `https://tdx.transportdata.tw/api/basic/v2/Bus/RealTimeNearStop/City/${city}/${encodeURIComponent(routeName)}?$format=JSON`;
-                const rtResponse = await fetch(rtUrl, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Accept': 'application/json'
-                    }
-                });
-                
-                let rtData = [];
-                if (rtResponse.ok) {
-                    rtData = await rtResponse.json();
-                }
-                
-                etaData = etaData.map(eta => {
-                    const match = rtData.find(rt => 
-                        rt.StopUID === eta.StopUID && rt.Direction === eta.Direction
-                    );
-                    
-                    let stopSequence = 999;
-                    const stops = eta.Direction === 0 ? routeStops.dir0 : routeStops.dir1;
-                    const stopIndex = stops.findIndex(s => s.StopUID === eta.StopUID);
-                    if (stopIndex >= 0) {
-                        stopSequence = stopIndex;
-                    }
-                    
-                    return { 
-                        ...eta, 
-                        PlateNumb: match?.PlateNumb || null,
-                        StopSequence: stopSequence
-                    };
-                });
-                
-                console.log('🚌 有車牌的站:', etaData.filter(e => e.PlateNumb));
-                
-                displayResults(etaData, routeInfo, routeStops);
-                showStatus(`查詢成功！共 ${etaData.length} 筆資料`, 'success');
 
-                if (!autoRefreshTimer) {
-                    startAutoRefresh();
+                    if (etaResponse.status === 429) {
+                        throw new Error('請求過於頻繁，請稍後再試');
+                    }
+
+                    if (!etaResponse.ok) {
+                        throw new Error(`API 錯誤 ${etaResponse.status}`);
+                    }
+
+                    let etaData = await etaResponse.json();
+
+                    const rtUrl = `https://tdx.transportdata.tw/api/basic/v2/Bus/RealTimeNearStop/City/${city}/${encodeURIComponent(routeName)}?$format=JSON`;
+                    const rtResponse = await fetch(rtUrl, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/json'
+                        }
+                    });
+
+                    let rtData = [];
+                    if (rtResponse.ok) {
+                        rtData = await rtResponse.json();
+                    }
+
+                    // 4. 合併車牌資料和站序
+                    etaData = etaData.map(eta => {
+                        const match = rtData.find(rt =>
+                            rt.StopUID === eta.StopUID && rt.Direction === eta.Direction
+                        );
+
+                        let stopSequence = 999;
+                        const stops = eta.Direction === 0 ? routeStops.dir0 : routeStops.dir1;
+                        const stopIndex = stops.findIndex(s => s.StopUID === eta.StopUID);
+                        if (stopIndex >= 0) {
+                            stopSequence = stopIndex;
+                        }
+
+                        return {
+                            ...eta,
+                            PlateNumb: match?.PlateNumb || null,
+                            StopSequence: stopSequence
+                        };
+                    });
+
+                    // 5. 將車牌資訊移到同車最近的站點（修正車牌顯示在舊站的問題）
+                    const plateToMinTime = {};
+                    etaData.forEach(eta => {
+                        if (eta.PlateNumb && eta.EstimateTime != null && eta.EstimateTime >= 0) {
+                            if (!plateToMinTime[eta.PlateNumb] || eta.EstimateTime < plateToMinTime[eta.PlateNumb].time) {
+                                plateToMinTime[eta.PlateNumb] = {
+                                    time: eta.EstimateTime,
+                                    stopUID: eta.StopUID,
+                                    direction: eta.Direction
+                                };
+                            }
+                        }
+                    });
+
+                    etaData = etaData.map(eta => {
+                        // 清除不是最近站點的車牌
+                        if (eta.PlateNumb) {
+                            const nearest = plateToMinTime[eta.PlateNumb];
+                            if (nearest && (eta.StopUID !== nearest.stopUID || eta.Direction !== nearest.direction)) {
+                                return { ...eta, PlateNumb: null };
+                            }
+                        }
+                        // 補上車牌到最近的站點
+                        for (const [plate, info] of Object.entries(plateToMinTime)) {
+                            if (eta.StopUID === info.stopUID && eta.Direction === info.direction && !eta.PlateNumb) {
+                                eta.PlateNumb = plate;
+                            }
+                        }
+                        return eta;
+                    });
+
+                    console.log('🚌 修正後有車牌的站:', etaData.filter(e => e.PlateNumb));
+
+                    displayResults(etaData, routeInfo, routeStops);
+                    showStatus(`查詢成功！共 ${etaData.length} 筆資料`, 'success');
+
+                    if (!autoRefreshTimer) {
+                        startAutoRefresh();
+                    }
+
+                } catch (error) {
+                    showStatus(`錯誤：${error.message}`, 'error');
+                    document.getElementById('results').innerHTML = '';
+                    if (autoRefreshTimer) {
+                        clearInterval(autoRefreshTimer);
+                        autoRefreshTimer = null;
+                    }
+                } finally {
+                    document.getElementById('searchBtn').disabled = false;
                 }
-                
-            } catch (error) {
-                showStatus(`錯誤：${error.message}`, 'error');
-                document.getElementById('results').innerHTML = '';
-                if (autoRefreshTimer) {
-                    clearInterval(autoRefreshTimer);
-                    autoRefreshTimer = null;
-                }
-            } finally {
-                document.getElementById('searchBtn').disabled = false;
             }
-        }
-
         function displayResults(data, routeInfo, routeStops) {
             const resultsDiv = document.getElementById('results');
             
